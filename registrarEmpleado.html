@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Registrar Nuevo Empleado</title>
+  <script src="./js/registrarEmpleado.js" defer></script>
+  <link rel="stylesheet" href="./css/registrarEmpleado.css">
+  <style>
+    body { font-family: Arial; padding: 40px; max-width: 600px; margin: auto; }
+    input, button { display: block; margin: 10px 0; padding: 10px; width: 100%; }
+    video { width: 100%; margin-top: 20px; }
+    #resultadoRegistro { margin-top: 20px; font-weight: bold; }
+  </style>
+</head>
+<body>
+<h2>Registrar Nuevo Empleado</h2>
+
+<input id="legajoRegistro" placeholder="Legajo">
+<input id="areaRegistro" placeholder="Área">
+<input id="rolRegistro" placeholder="Rol">
+<input id="turnoRegistro" placeholder="Turno">
+
+<button onclick="registrarNuevoEmpleado()">Registrar nuevo</button>
+<p id="resultadoRegistro"></p>
+<video id="videoRegistro" autoplay muted></video>
+
+<button onclick="window.location.href='index.html'">Volver</button>
+</body>
+</html>
