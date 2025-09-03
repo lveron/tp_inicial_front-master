@@ -1,6 +1,5 @@
-const API_URL = "http://localhost:5000"; // URL base del backend
+const API_URL = "https://tpinicial-master2-production.up.railway.app"; // ← URL de tu backend
 console.log("✅ script.js cargado correctamente");
-
 
 async function validarYRegistrar() {
   const legajo = document.getElementById("legajo").value.trim();
@@ -12,11 +11,18 @@ async function validarYRegistrar() {
   }
 
   try {
+    mostrar("Conectando con servidor...");
+    
     const validacion = await fetch(`${API_URL}/validar`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ legajo, turno })
-    }).then(res => res.json());
+    }).then(res => {
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+      return res.json();
+    });
 
     if (!validacion.valido) {
       mostrar(validacion.mensaje, true);
@@ -24,14 +30,14 @@ async function validarYRegistrar() {
     }
 
     mostrar("Validación correcta. Activando cámara...");
-    activarCamara();
+    await activarCamara();
 
-    setTimeout(() => capturarYReconocer(legajo, turno), 2000);
+    setTimeout(() => capturarYReconocer(legajo, turno), 3000);
   } catch (error) {
-    mostrar("Error al validar: " + error.message, true);
+    console.error("Error completo:", error);
+    mostrar("Error de conexión con servidor: " + error.message, true);
   }
 }
-
 
 function mostrar(mensaje, error = false) {
   const resultado = document.getElementById("resultado");
@@ -39,23 +45,33 @@ function mostrar(mensaje, error = false) {
   resultado.style.color = error ? "red" : "green";
 }
 
-function activarCamara() {
-  navigator.mediaDevices.getUserMedia({ video: true })
-    .then(stream => {
-      document.getElementById("video").srcObject = stream;
-    })
-    .catch(() => mostrar("No se pudo acceder a la cámara", true));
+async function activarCamara() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    const video = document.getElementById("video");
+    video.srcObject = stream;
+    
+    return new Promise((resolve, reject) => {
+      video.onloadedmetadata = () => {
+        video.play().then(resolve).catch(reject);
+      };
+    });
+  } catch (error) {
+    mostrar("No se pudo acceder a la cámara: " + error.message, true);
+    throw error;
+  }
 }
 
 async function capturarYReconocer(legajo, turno) {
   const video = document.getElementById("video");
 
-  // Esperar hasta que el video tenga dimensiones válidas
   if (!video || video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) {
-    mostrar("Esperá unos segundos, la cámara aún no está lista.", true);
-    console.warn("⚠️ Video no listo o sin dimensiones.");
+    mostrar("Espera unos segundos, la cámara aún no está lista.", true);
+    setTimeout(() => capturarYReconocer(legajo, turno), 1000);
     return;
   }
+
+  mostrar("Capturando imagen...");
 
   const canvas = document.createElement("canvas");
   canvas.width = video.videoWidth;
@@ -63,40 +79,63 @@ async function capturarYReconocer(legajo, turno) {
   const ctx = canvas.getContext("2d");
 
   if (!ctx) {
-    mostrar("No se pudo acceder al contexto del canvas.", true);
-    console.warn("⚠️ Contexto de canvas nulo.");
+    mostrar("Error del navegador: no se pudo crear contexto de canvas.", true);
     return;
   }
 
   ctx.drawImage(video, 0, 0);
 
-  const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg"));
-  if (!blob) {
-    mostrar("No se pudo capturar la imagen. Probá de nuevo.", true);
-    console.warn("⚠️ Blob nulo.");
-    return;
-  }
-
-  const formData = new FormData();
-  formData.append("imagen", blob);
-  formData.append("legajo", legajo);
-  formData.append("turno", turno);
-
   try {
+    const blob = await new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error("No se pudo crear la imagen"));
+      }, "image/jpeg", 0.8);
+    });
+
+    const formData = new FormData();
+    formData.append("imagen", blob);
+    formData.append("legajo", legajo);
+    formData.append("turno", turno);
+
+    mostrar("Enviando para reconocimiento...");
+
     const respuesta = await fetch(`${API_URL}/reconocer`, {
       method: "POST",
       body: formData
-    }).then(res => res.json());
+    }).then(res => {
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+      return res.json();
+    });
 
     mostrar(respuesta.mensaje, !respuesta.exito);
+    
+    // Detener la cámara después del reconocimiento
+    const stream = video.srcObject;
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      video.srcObject = null;
+    }
+
   } catch (error) {
-    console.error("❌ Error en el fetch:", error);
-    mostrar("Error al reconocer: " + error.message, true);
+    console.error("Error en reconocimiento:", error);
+    mostrar("Error al procesar: " + error.message, true);
   }
 }
 
-
-
-
-
-
+// Test de conectividad al cargar
+window.addEventListener('load', async () => {
+  try {
+    const response = await fetch(`${API_URL}/ping`);
+    if (response.ok) {
+      console.log("✅ Servidor conectado");
+      const data = await response.json();
+      console.log("Respuesta del servidor:", data);
+    }
+  } catch (error) {
+    console.error("❌ Error de conexión:", error);
+    mostrar("⚠️ No se pudo conectar con el servidor", true);
+  }
+});
