@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Control de Asistencias</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .metric-card {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .metric-number {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #007bff;
+            margin: 10px 0;
+        }
+        
+        .metric-label {
+            font-size: 1.1em;
+            color: #666;
+        }
+        
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .chart-container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .chart-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 15px;
+            text-align: center;
+            color: #333;
+        }
+        
+        .loading {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+        }
+        
+        .error {
+            color: red;
+            text-align: center;
+            background: #ffe6e6;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        
+        .navigation {
+            text-align: center;
+            margin-top: 30px;
+        }
+        
+        .nav-button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 6px;
+            text-decoration: none;
+            display: inline-block;
+            margin: 0 10px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        
+        .nav-button:hover {
+            background-color: #0056b3;
+        }
+        
+        @media (max-width: 768px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .metric-number {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Dashboard - Control de Asistencias</h1>
+            <p>PyME Alimenticia - Análisis en Tiempo Real</p>
+        </div>
+
+        <div id="loading" class="loading">
+            Cargando datos del dashboard...
+        </div>
+
+        <div id="error" class="error" style="display: none;">
+            Error al cargar los datos del dashboard
+        </div>
+
+        <div id="dashboard-content" style="display: none;">
+            <!-- Métricas principales -->
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-number" id="totalEmpleados">0</div>
+                    <div class="metric-label">Total Empleados</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-number" id="asistenciasHoy">0</div>
+                    <div class="metric-label">Asistencias Hoy</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-number" id="porcentajeAsistencia">0%</div>
+                    <div class="metric-label">% Asistencia Hoy</div>
+                </div>
+            </div>
+
+            <!-- Gráficos -->
+            <div class="charts-grid">
+                <div class="chart-container">
+                    <div class="chart-title">Asistencias Últimos 7 Días</div>
+                    <canvas id="chartAsistencias" width="400" height="300"></canvas>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">Empleados por Turno</div>
+                    <canvas id="chartTurnos" width="400" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="navigation">
+            <a href="index.html" class="nav-button">Control de Ingresos</a>
+            <a href="registrarEmpleado.html" class="nav-button">Registrar Empleado</a>
+            <button onclick="recargarDatos()" class="nav-button">Actualizar Datos</button>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = "https://tpinicial-master2-production.up.railway.app";
+        
+        let chartAsistencias = null;
+        let chartTurnos = null;
+
+        async function cargarDashboard() {
+            try {
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('error').style.display = 'none';
+                document.getElementById('dashboard-content').style.display = 'none';
+
+                const response = await fetch(`${API_URL}/dashboard`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data.exito) {
+                    throw new Error(data.mensaje || 'Error en respuesta del servidor');
+                }
+
+                // Actualizar métricas
+                document.getElementById('totalEmpleados').textContent = data.totalEmpleados;
+                document.getElementById('asistenciasHoy').textContent = data.asistenciasHoy;
+                
+                // Calcular porcentaje de asistencia
+                const porcentaje = data.totalEmpleados > 0 
+                    ? Math.round((data.asistenciasHoy / data.totalEmpleados) * 100)
+                    : 0;
+                document.getElementById('porcentajeAsistencia').textContent = porcentaje + '%';
+
+                // Crear gráficos
+                crearGraficoAsistencias(data.asistenciasSemana || []);
+                crearGraficoTurnos(data.empleadosPorTurno || {});
+
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('dashboard-content').style.display = 'block';
+
+            } catch (error) {
+                console.error('Error cargando dashboard:', error);
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('error').textContent = 'Error: ' + error.message;
+            }
+        }
+
+        function crearGraficoAsistencias(datos) {
+            const ctx = document.getElementById('chartAsistencias').getContext('2d');
+            
+            // Destruir gráfico anterior si existe
+            if (chartAsistencias) {
+                chartAsistencias.destroy();
+            }
+
+            const labels = datos.map(item => {
+                const fecha = new Date(item.fecha);
+                return fecha.toLocaleDateString('es-ES', { 
+                    weekday: 'short', 
+                    month: 'short', 
+                    day: 'numeric' 
+                });
+            });
+            
+            const valores = datos.map(item => item.count);
+
+            chartAsistencias = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Asistencias',
+                        data: valores,
+                        borderColor: '#007bff',
+                        backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointBackgroundColor: '#007bff',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        pointRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function crearGraficoTurnos(datos) {
+            const ctx = document.getElementById('chartTurnos').getContext('2d');
+            
+            // Destruir gráfico anterior si existe
+            if (chartTurnos) {
+                chartTurnos.destroy();
+            }
+
+            const labels = ['Mañana', 'Tarde', 'Noche'];
+            const valores = [
+                datos.mañana || 0,
+                datos.tarde || 0,
+                datos.noche || 0
+            ];
+
+            chartTurnos = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: valores,
+                        backgroundColor: [
+                            '#FFD93D',  // Amarillo para mañana
+                            '#FF6B6B',  // Rojo para tarde
+                            '#4ECDC4'   // Verde para noche
+                        ],
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                usePointStyle: true
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function recargarDatos() {
+            cargarDashboard();
+        }
+
+        // Cargar dashboard al cargar la página
+        window.addEventListener('load', cargarDashboard);
+
+        // Actualizar automáticamente cada 5 minutos
+        setInterval(cargarDashboard, 5 * 60 * 1000);
+    </script>
+</body>
+</html>
