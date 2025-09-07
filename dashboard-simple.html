@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard Simple</title>
+    <style>
+        body { font-family: Arial; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .card { background: white; margin: 10px 0; padding: 20px; border-radius: 8px; }
+        .metric { font-size: 2em; color: #007bff; text-align: center; }
+        .label { color: #666; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Dashboard - Control de Asistencias</h1>
+        
+        <div class="card">
+            <div class="metric" id="totalEmpleados">-</div>
+            <div class="label">Total Empleados</div>
+        </div>
+        
+        <div class="card">
+            <div class="metric" id="asistenciasHoy">-</div>
+            <div class="label">Asistencias Hoy</div>
+        </div>
+        
+        <div class="card">
+            <div class="metric" id="porcentaje">-</div>
+            <div class="label">% Asistencia</div>
+        </div>
+        
+        <div class="card">
+            <h3>Empleados por Turno:</h3>
+            <div id="turnos">Cargando...</div>
+        </div>
+        
+        <button onclick="location.href='index.html'">Volver</button>
+    </div>
+
+    <script>
+        const API_URL = "https://tpinicial-master2-production.up.railway.app";
+        
+        async function cargar() {
+            try {
+                const response = await fetch(`${API_URL}/dashboard`);
+                const data = await response.json();
+                
+                document.getElementById('totalEmpleados').textContent = data.totalEmpleados;
+                document.getElementById('asistenciasHoy').textContent = data.asistenciasHoy;
+                
+                const pct = data.totalEmpleados > 0 ? 
+                    Math.round((data.asistenciasHoy / data.totalEmpleados) * 100) : 0;
+                document.getElementById('porcentaje').textContent = pct + '%';
+                
+                const turnos = data.empleadosPorTurno || {};
+                document.getElementById('turnos').innerHTML = 
+                    `Mañana: ${turnos.mañana || 0} | Tarde: ${turnos.tarde || 0} | Noche: ${turnos.noche || 0}`;
+                    
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+        
+        cargar();
+    </script>
+</body>
+</html>
