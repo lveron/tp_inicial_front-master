@@ -75,7 +75,7 @@ async function registrarNuevoEmpleado() {
     });
 
     const formData = new FormData();
-    formData.append("imagen", blob);
+    formData.append("imagen", blob, `${legajo}.jpg`);
     formData.append("legajo", legajo);
     formData.append("area", area);
     formData.append("rol", rol);
