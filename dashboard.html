@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - Control de Asistencias</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <style>
         body {
             font-family: 'Segoe UI', sans-serif;
@@ -15,7 +15,7 @@
         }
         
         .container {
-            max-width: 1200px;
+            max-width: 1000px;
             margin: 0 auto;
         }
         
@@ -30,28 +30,28 @@
         
         .metrics-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 20px;
             margin-bottom: 30px;
         }
         
         .metric-card {
             background: white;
-            padding: 25px;
+            padding: 20px;
             border-radius: 10px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
             text-align: center;
         }
         
         .metric-number {
-            font-size: 2.5em;
+            font-size: 2em;
             font-weight: bold;
             color: #007bff;
             margin: 10px 0;
         }
         
         .metric-label {
-            font-size: 1.1em;
+            font-size: 1em;
             color: #666;
         }
         
@@ -67,20 +67,27 @@
             padding: 20px;
             border-radius: 10px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            height: 400px;
         }
         
         .chart-title {
-            font-size: 1.2em;
+            font-size: 1.1em;
             font-weight: bold;
             margin-bottom: 15px;
             text-align: center;
             color: #333;
         }
         
+        .chart-canvas {
+            width: 100% !important;
+            height: 300px !important;
+        }
+        
         .loading {
             text-align: center;
             color: #666;
             font-style: italic;
+            padding: 20px;
         }
         
         .error {
@@ -101,7 +108,7 @@
             background-color: #007bff;
             color: white;
             border: none;
-            padding: 12px 25px;
+            padding: 12px 20px;
             border-radius: 6px;
             text-decoration: none;
             display: inline-block;
@@ -117,10 +124,6 @@
         @media (max-width: 768px) {
             .charts-grid {
                 grid-template-columns: 1fr;
-            }
-            
-            .metric-number {
-                font-size: 2em;
             }
         }
     </style>
@@ -161,11 +164,11 @@
             <div class="charts-grid">
                 <div class="chart-container">
                     <div class="chart-title">Asistencias Últimos 7 Días</div>
-                    <canvas id="chartAsistencias" width="400" height="300"></canvas>
+                    <canvas id="chartAsistencias" class="chart-canvas"></canvas>
                 </div>
                 <div class="chart-container">
                     <div class="chart-title">Empleados por Turno</div>
-                    <canvas id="chartTurnos" width="400" height="300"></canvas>
+                    <canvas id="chartTurnos" class="chart-canvas"></canvas>
                 </div>
             </div>
         </div>
@@ -173,7 +176,7 @@
         <div class="navigation">
             <a href="index.html" class="nav-button">Control de Ingresos</a>
             <a href="registrarEmpleado.html" class="nav-button">Registrar Empleado</a>
-            <button onclick="recargarDatos()" class="nav-button">Actualizar Datos</button>
+            <button onclick="recargarDatos()" class="nav-button">Actualizar</button>
         </div>
     </div>
 
@@ -182,17 +185,16 @@
         
         let chartAsistencias = null;
         let chartTurnos = null;
+        let datosGlobales = null;
 
         async function cargarDashboard() {
             try {
-                document.getElementById('loading').style.display = 'block';
-                document.getElementById('error').style.display = 'none';
-                document.getElementById('dashboard-content').style.display = 'none';
-
+                mostrarCarga(true);
+                
                 const response = await fetch(`${API_URL}/dashboard`);
                 
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    throw new Error(`Error HTTP: ${response.status}`);
                 }
                 
                 const data = await response.json();
@@ -201,94 +203,138 @@
                     throw new Error(data.mensaje || 'Error en respuesta del servidor');
                 }
 
-                // Actualizar métricas
-                document.getElementById('totalEmpleados').textContent = data.totalEmpleados;
-                document.getElementById('asistenciasHoy').textContent = data.asistenciasHoy;
+                datosGlobales = data;
                 
-                // Calcular porcentaje de asistencia
-                const porcentaje = data.totalEmpleados > 0 
-                    ? Math.round((data.asistenciasHoy / data.totalEmpleados) * 100)
-                    : 0;
-                document.getElementById('porcentajeAsistencia').textContent = porcentaje + '%';
-
-                // Crear gráficos
-                crearGraficoAsistencias(data.asistenciasSemana || []);
-                crearGraficoTurnos(data.empleadosPorTurno || {});
-
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('dashboard-content').style.display = 'block';
+                // Actualizar métricas
+                actualizarMetricas(data);
+                
+                // Crear gráficos después de un pequeño delay
+                setTimeout(() => {
+                    crearGraficos(data);
+                    mostrarCarga(false);
+                }, 100);
 
             } catch (error) {
                 console.error('Error cargando dashboard:', error);
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('error').style.display = 'block';
-                document.getElementById('error').textContent = 'Error: ' + error.message;
+                mostrarError('Error: ' + error.message);
             }
         }
 
+        function mostrarCarga(mostrar) {
+            document.getElementById('loading').style.display = mostrar ? 'block' : 'none';
+            document.getElementById('error').style.display = 'none';
+            document.getElementById('dashboard-content').style.display = mostrar ? 'none' : 'block';
+        }
+
+        function mostrarError(mensaje) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('error').style.display = 'block';
+            document.getElementById('error').textContent = mensaje;
+            document.getElementById('dashboard-content').style.display = 'none';
+        }
+
+        function actualizarMetricas(data) {
+            document.getElementById('totalEmpleados').textContent = data.totalEmpleados;
+            document.getElementById('asistenciasHoy').textContent = data.asistenciasHoy;
+            
+            const porcentaje = data.totalEmpleados > 0 
+                ? Math.round((data.asistenciasHoy / data.totalEmpleados) * 100)
+                : 0;
+            document.getElementById('porcentajeAsistencia').textContent = porcentaje + '%';
+        }
+
+        function crearGraficos(data) {
+            crearGraficoAsistencias(data.asistenciasSemana || []);
+            crearGraficoTurnos(data.empleadosPorTurno || {});
+        }
+
         function crearGraficoAsistencias(datos) {
-            const ctx = document.getElementById('chartAsistencias').getContext('2d');
+            const canvas = document.getElementById('chartAsistencias');
+            const ctx = canvas.getContext('2d');
             
             // Destruir gráfico anterior si existe
             if (chartAsistencias) {
                 chartAsistencias.destroy();
+                chartAsistencias = null;
+            }
+
+            if (datos.length === 0) {
+                ctx.font = '16px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('No hay datos disponibles', canvas.width / 2, canvas.height / 2);
+                return;
             }
 
             const labels = datos.map(item => {
                 const fecha = new Date(item.fecha);
                 return fecha.toLocaleDateString('es-ES', { 
                     weekday: 'short', 
-                    month: 'short', 
                     day: 'numeric' 
                 });
             });
             
             const valores = datos.map(item => item.count);
 
-            chartAsistencias = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Asistencias',
-                        data: valores,
-                        borderColor: '#007bff',
-                        backgroundColor: 'rgba(0, 123, 255, 0.1)',
-                        borderWidth: 3,
-                        fill: true,
-                        tension: 0.4,
-                        pointBackgroundColor: '#007bff',
-                        pointBorderColor: '#fff',
-                        pointBorderWidth: 2,
-                        pointRadius: 6
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
+            try {
+                chartAsistencias = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Asistencias',
+                            data: valores,
+                            borderColor: '#007bff',
+                            backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.3,
+                            pointBackgroundColor: '#007bff',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2,
+                            pointRadius: 4
+                        }]
                     },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                stepSize: 1
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: {
+                            intersect: false,
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
                             }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    stepSize: 1
+                                }
+                            }
+                        },
+                        animation: {
+                            duration: 1000,
+                            easing: 'easeInOutQuart'
                         }
                     }
-                }
-            });
+                });
+            } catch (e) {
+                console.error('Error creando gráfico de asistencias:', e);
+                ctx.font = '16px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('Error al crear gráfico', canvas.width / 2, canvas.height / 2);
+            }
         }
 
         function crearGraficoTurnos(datos) {
-            const ctx = document.getElementById('chartTurnos').getContext('2d');
+            const canvas = document.getElementById('chartTurnos');
+            const ctx = canvas.getContext('2d');
             
             // Destruir gráfico anterior si existe
             if (chartTurnos) {
                 chartTurnos.destroy();
+                chartTurnos = null;
             }
 
             const labels = ['Mañana', 'Tarde', 'Noche'];
@@ -298,35 +344,57 @@
                 datos.noche || 0
             ];
 
-            chartTurnos = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        data: valores,
-                        backgroundColor: [
-                            '#FFD93D',  // Amarillo para mañana
-                            '#FF6B6B',  // Rojo para tarde
-                            '#4ECDC4'   // Verde para noche
-                        ],
-                        borderWidth: 2,
-                        borderColor: '#fff'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                padding: 20,
-                                usePointStyle: true
+            const total = valores.reduce((a, b) => a + b, 0);
+            if (total === 0) {
+                ctx.font = '16px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('No hay empleados registrados', canvas.width / 2, canvas.height / 2);
+                return;
+            }
+
+            try {
+                chartTurnos = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: valores,
+                            backgroundColor: [
+                                '#FFD93D',
+                                '#FF6B6B', 
+                                '#4ECDC4'
+                            ],
+                            borderWidth: 2,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    padding: 15,
+                                    usePointStyle: true,
+                                    font: {
+                                        size: 12
+                                    }
+                                }
                             }
+                        },
+                        animation: {
+                            duration: 1000,
+                            easing: 'easeInOutQuart'
                         }
                     }
-                }
-            });
+                });
+            } catch (e) {
+                console.error('Error creando gráfico de turnos:', e);
+                ctx.font = '16px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('Error al crear gráfico', canvas.width / 2, canvas.height / 2);
+            }
         }
 
         function recargarDatos() {
@@ -334,10 +402,20 @@
         }
 
         // Cargar dashboard al cargar la página
-        window.addEventListener('load', cargarDashboard);
+        window.addEventListener('load', function() {
+            // Pequeño delay para asegurar que Chart.js esté completamente cargado
+            setTimeout(cargarDashboard, 200);
+        });
 
-        // Actualizar automáticamente cada 5 minutos
-        setInterval(cargarDashboard, 5 * 60 * 1000);
+        // Limpiar al salir de la página
+        window.addEventListener('beforeunload', function() {
+            if (chartAsistencias) {
+                chartAsistencias.destroy();
+            }
+            if (chartTurnos) {
+                chartTurnos.destroy();
+            }
+        });
     </script>
 </body>
 </html>
